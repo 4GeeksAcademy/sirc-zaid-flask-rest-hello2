@@ -3,6 +3,12 @@ This module takes care of starting the API Server, Loading the DB and Adding the
 """
 import os
 from flask import Flask, request, jsonify, url_for
+
+from flask_jwt_extended import create_access_token
+from flask_jwt_extended import get_jwt_identity
+from flask_jwt_extended import jwt_required
+from flask_jwt_extended import JWTManager
+
 from flask_migrate import Migrate
 from flask_swagger import swagger
 from flask_cors import CORS
@@ -24,7 +30,11 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 MIGRATE = Migrate(app, db)
 db.init_app(app)
 CORS(app)
+# Setup the Flask-JWT-Extended extension
+app.config["JWT_SECRET_KEY"] = "super-secret"  # Change this!
+jwt = JWTManager(app)
 setup_admin(app)
+
 
 # Handle/serialize errors like a JSON object
 @app.errorhandler(APIException)
@@ -35,6 +45,79 @@ def handle_invalid_usage(error):
 @app.route('/')
 def sitemap():
     return generate_sitemap(app)
+
+# SING UP
+
+@app.route('/singup', methods=['POST'])
+def create_user():  
+    request_body = request.get_json(force=True)
+
+    prevUser = User.query.filter_by(email=request_body["email"]).first()
+
+    if prevUser:
+       return jsonify({ "msg": "Este email ya existe" })
+
+    usuario = User(email=request_body["email"], password=request_body["password"])
+
+    db.session.add(usuario)
+    db.session.commit()
+
+    return {
+        "results": usuario.serialize()
+    }
+
+# LOGIN 
+
+@app.route('/login', methods=['POST'])
+def login():
+    email = request.json.get("email", None)
+    password = request.json.get("password", None)
+
+    user_query = User.query.filter_by(email=email).first()
+    print(user_query)
+
+    if user_query is None:
+        return {"msg": "Este email no existe"}
+
+    if email != user_query.email or password != user_query.password:
+        return {"msg": "Email o contraseña incorrectos"}
+
+    access_token = create_access_token(identity=email)
+
+    response_body = {
+        "access_token": access_token,
+        "user": user_query.serialize()
+    }   
+
+    return jsonify(response_body)
+
+@app.route("/user/favorites", methods=["GET"])
+@jwt_required()
+def protected():
+    # Accede a la identidad del usuario actual con get_jwt_identity
+    current_user_email = get_jwt_identity()
+
+    user = User.query.filter_by(email=current_user_email).first()
+    favorites = Favorites.query.filter_by(user_id = user.id).all()
+
+    if favorites == []:
+        return jsonify({"msg": "No hay favoritos"})
+    
+    response = list(map(lambda favorite: favorite.serialize(), favorites)) 
+
+    return jsonify({"results": response}), 200
+
+# VALID TOKEN
+
+@app.route("/validate_token", methods=["GET"])
+@jwt_required()
+def validate():
+    # Accede a la identidad del usuario actual con get_jwt_identity
+    current_user = get_jwt_identity()
+    print(current_user)
+
+
+    return jsonify({"is_logged": True}), 200
 
 # USER
 

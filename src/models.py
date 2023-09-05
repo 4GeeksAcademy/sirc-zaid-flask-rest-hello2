@@ -4,10 +4,10 @@ db = SQLAlchemy()
 
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(250), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password = db.Column(db.String(80), unique=False, nullable=False)
-    is_active = db.Column(db.Boolean(), unique=False, nullable=False)
+    username = db.Column(db.String(250), nullable=True)
+    email = db.Column(db.String(120), unique=True, nullable=True)
+    password = db.Column(db.String(80), unique=False, nullable=True)
+    is_active = db.Column(db.Boolean(), unique=False, nullable=True)
 
     def __repr__(self):
         return '<User %r>' % self.id
@@ -102,6 +102,7 @@ class Starships(db.Model):
         }
     
 class Favorites(db.Model):
+
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
     people_id = db.Column(db.Integer, db.ForeignKey('people.id'))
@@ -119,12 +120,17 @@ class Favorites(db.Model):
         return '<Favorites %r>' % self.id
 
     def serialize(self):
+        planetaInfo = Planets.query.filter_by(id= self.planet_id).first()
+        charactersInfo = People.query.filter_by(id= self.people_id).first()
+        vehiclesInfo = Vehicles.query.filter_by(id= self.vehicle_id).first()
+        starshipsInfo = Starships.query.filter_by(id= self.starships_id).first()
+
         return {
             "id": self.id,
             "user_id": self.user_id,
-            "people_id": self.people_id,
-            "planet_id": self.planet_id,
-            "vehicle_id": self.vehicle_id,
-            "starships_id": self.starships_id,
+            "planeta": None if planetaInfo is None else planetaInfo.serialize(),
+            "characters": None if charactersInfo is None else charactersInfo.serialize(),
+            "vehicles": None if vehiclesInfo is None else vehiclesInfo.serialize(),
+            "starships": None if starshipsInfo is None else starshipsInfo.serialize(),
             # do not serialize the password, its a security breach
         }
